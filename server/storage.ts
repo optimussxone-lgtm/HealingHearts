@@ -6,8 +6,11 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   
+  getApprovedQuotes(): Promise<Quote[]>;
   getAllQuotes(): Promise<Quote[]>;
+  getPendingQuotes(): Promise<Quote[]>;
   createQuote(quote: InsertQuote): Promise<Quote>;
+  approveQuote(id: string): Promise<Quote | undefined>;
   
   getRecentChatMessages(limit?: number): Promise<ChatMessage[]>;
   createChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
@@ -59,6 +62,7 @@ export class MemStorage implements IStorage {
         id,
         content: quote.content,
         author: quote.author,
+        approved: true, // Default quotes are pre-approved
         createdAt: new Date(),
       });
     });
@@ -135,10 +139,22 @@ export class MemStorage implements IStorage {
     return user;
   }
 
+  async getApprovedQuotes(): Promise<Quote[]> {
+    return Array.from(this.quotes.values())
+      .filter(quote => quote.approved)
+      .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+  }
+
   async getAllQuotes(): Promise<Quote[]> {
     return Array.from(this.quotes.values()).sort((a, b) => 
       new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime()
     );
+  }
+
+  async getPendingQuotes(): Promise<Quote[]> {
+    return Array.from(this.quotes.values())
+      .filter(quote => !quote.approved)
+      .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
   }
 
   async createQuote(insertQuote: InsertQuote): Promise<Quote> {
@@ -147,10 +163,21 @@ export class MemStorage implements IStorage {
       ...insertQuote, 
       id, 
       createdAt: new Date(),
-      author: insertQuote.author || "Unknown"
+      author: insertQuote.author || "Unknown",
+      approved: false // New quotes require approval
     };
     this.quotes.set(id, quote);
     return quote;
+  }
+
+  async approveQuote(id: string): Promise<Quote | undefined> {
+    const quote = this.quotes.get(id);
+    if (quote) {
+      quote.approved = true;
+      this.quotes.set(id, quote);
+      return quote;
+    }
+    return undefined;
   }
 
   async getRecentChatMessages(limit: number = 50): Promise<ChatMessage[]> {

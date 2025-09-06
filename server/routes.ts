@@ -121,12 +121,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // API Routes
+  // Get approved quotes for public view
   app.get("/api/quotes", async (req, res) => {
     try {
-      const quotes = await storage.getAllQuotes();
+      const quotes = await storage.getApprovedQuotes();
       res.json(quotes);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch quotes" });
+    }
+  });
+
+  // Get pending quotes for admin approval
+  app.get("/api/quotes/pending", requireAdmin, async (req, res) => {
+    try {
+      const quotes = await storage.getPendingQuotes();
+      res.json(quotes);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch pending quotes" });
+    }
+  });
+
+  // Approve a quote (admin only)
+  app.post("/api/quotes/:id/approve", requireAdmin, async (req, res) => {
+    try {
+      const quote = await storage.approveQuote(req.params.id);
+      if (!quote) {
+        return res.status(404).json({ message: "Quote not found" });
+      }
+      res.json(quote);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to approve quote" });
     }
   });
 

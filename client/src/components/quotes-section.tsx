@@ -29,8 +29,8 @@ export default function QuotesSection() {
       setNewQuote("");
       setNewAuthor("");
       toast({
-        title: "Quote added!",
-        description: "Your inspirational quote has been shared.",
+        title: "Quote submitted!",
+        description: "Your quote is pending admin approval before it appears on the site.",
       });
     },
     onError: () => {

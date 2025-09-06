@@ -6,7 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PlusCircle, Video, FileText, CheckCircle } from 'lucide-react';
+import { PlusCircle, Video, FileText, CheckCircle, Clock, Check } from 'lucide-react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { queryClient, apiRequest } from '@/lib/queryClient';
 
 export function AdminDashboard() {
   const [blogForm, setBlogForm] = useState({ title: '', content: '', author: '' });
@@ -14,6 +16,30 @@ export function AdminDashboard() {
   const [successMessage, setSuccessMessage] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Fetch pending quotes for approval
+  const { data: pendingQuotes = [] } = useQuery({
+    queryKey: ['/api/quotes/pending'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/quotes/pending');
+      return response.json();
+    },
+  });
+
+  const approveQuoteMutation = useMutation({
+    mutationFn: async (quoteId: string) => {
+      const response = await apiRequest('POST', `/api/quotes/${quoteId}/approve`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/quotes/pending'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
+      setSuccessMessage('Quote approved successfully!');
+    },
+    onError: () => {
+      setError('Failed to approve quote. Please try again.');
+    },
+  });
 
   const handleBlogSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,8 +119,17 @@ export function AdminDashboard() {
         </Alert>
       )}
 
-      <Tabs defaultValue="blog" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
+      <Tabs defaultValue="quotes" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="quotes" className="flex items-center gap-2">
+            <Clock className="h-4 w-4" />
+            Quote Approvals
+            {pendingQuotes.length > 0 && (
+              <span className="ml-1 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">
+                {pendingQuotes.length}
+              </span>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="blog" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
             Blog Posts
@@ -104,6 +139,57 @@ export function AdminDashboard() {
             Videos
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="quotes">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                Pending Quote Approvals
+              </CardTitle>
+              <CardDescription>
+                Review and approve user-submitted quotes
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {pendingQuotes.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">
+                  No pending quotes to review.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {pendingQuotes.map((quote: any) => (
+                    <Card key={quote.id} className="border-l-4 border-l-orange-500">
+                      <CardContent className="pt-4">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <blockquote className="text-lg font-medium mb-2">
+                              "{quote.content}"
+                            </blockquote>
+                            <p className="text-sm text-muted-foreground">
+                              - {quote.author}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Submitted: {new Date(quote.createdAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <Button
+                            onClick={() => approveQuoteMutation.mutate(quote.id)}
+                            disabled={approveQuoteMutation.isPending}
+                            className="ml-4"
+                          >
+                            <Check className="h-4 w-4 mr-1" />
+                            {approveQuoteMutation.isPending ? 'Approving...' : 'Approve'}
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="blog">
           <Card>

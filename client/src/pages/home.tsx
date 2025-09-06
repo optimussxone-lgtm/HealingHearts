@@ -7,8 +7,11 @@ import QuotesSection from "@/components/quotes-section";
 import ChatSection from "@/components/chat-section";
 import ResourcesSection from "@/components/resources-section";
 import Footer from "@/components/footer";
+import { useAdmin } from "@/hooks/use-admin";
 
 export default function Home() {
+  const { isAdmin } = useAdmin();
+  
   return (
     <div className="min-h-screen">
       <Header />
@@ -43,7 +46,7 @@ export default function Home() {
       </section>
 
       <FaqSection />
-      <BlogSection />
+      {isAdmin && <BlogSection />}
       <GamesSection />
       <QuizzesSection />
       <QuotesSection />
