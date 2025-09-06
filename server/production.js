@@ -36,6 +36,7 @@ class MemStorage {
         id,
         content: quote.content,
         author: quote.author,
+        approved: true, // Default quotes are pre-approved
         createdAt: new Date(),
       });
     });
@@ -63,10 +64,22 @@ class MemStorage {
     });
   }
 
+  async getApprovedQuotes() {
+    return Array.from(this.quotes.values())
+      .filter(quote => quote.approved)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
   async getAllQuotes() {
     return Array.from(this.quotes.values()).sort((a, b) => 
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
+  }
+
+  async getPendingQuotes() {
+    return Array.from(this.quotes.values())
+      .filter(quote => !quote.approved)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   async createQuote(quote) {
@@ -75,10 +88,21 @@ class MemStorage {
       ...quote, 
       id, 
       createdAt: new Date(),
-      author: quote.author || "Unknown"
+      author: quote.author || "Unknown",
+      approved: false // New quotes require approval
     };
     this.quotes.set(id, newQuote);
     return newQuote;
+  }
+
+  async approveQuote(id) {
+    const quote = this.quotes.get(id);
+    if (quote) {
+      quote.approved = true;
+      this.quotes.set(id, quote);
+      return quote;
+    }
+    return undefined;
   }
 
   async getAllFaqQuestions() {
@@ -272,10 +296,33 @@ app.get("/api/auth/status", (req, res) => {
 // API Routes
 app.get("/api/quotes", async (req, res) => {
   try {
-    const quotes = await storage.getAllQuotes();
+    const quotes = await storage.getApprovedQuotes();
     res.json(quotes);
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch quotes" });
+  }
+});
+
+// Get pending quotes for admin approval
+app.get("/api/quotes/pending", requireAdmin, async (req, res) => {
+  try {
+    const quotes = await storage.getPendingQuotes();
+    res.json(quotes);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch pending quotes" });
+  }
+});
+
+// Approve a quote (admin only)
+app.post("/api/quotes/:id/approve", requireAdmin, async (req, res) => {
+  try {
+    const quote = await storage.approveQuote(req.params.id);
+    if (!quote) {
+      return res.status(404).json({ message: "Quote not found" });
+    }
+    res.json(quote);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to approve quote" });
   }
 });
 
