@@ -243,7 +243,7 @@ app.post("/api/blog", async (req, res) => {
 });
 
 // Serve static files
-const publicPath = path.join(__dirname, 'public');
+const publicPath = path.join(__dirname, '..', 'dist', 'public');
 if (fs.existsSync(publicPath)) {
   app.use(express.static(publicPath));
   app.get('*', (req, res) => {
