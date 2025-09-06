@@ -1,4 +1,5 @@
 import express from "express";
+import session from "express-session";
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import path from "path";
@@ -16,6 +17,7 @@ class MemStorage {
     this.chatMessages = new Map();
     this.faqQuestions = new Map();
     this.blogPosts = new Map();
+    this.videos = new Map();
     
     this.initializeDefaultData();
   }
@@ -101,6 +103,24 @@ class MemStorage {
     return newPost;
   }
 
+  async getAllVideos() {
+    return Array.from(this.videos.values()).sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+
+  async createVideo(video) {
+    const id = Math.random().toString(36).substr(2, 9);
+    const newVideo = { 
+      ...video, 
+      id, 
+      createdAt: new Date(),
+      description: video.description || ""
+    };
+    this.videos.set(id, newVideo);
+    return newVideo;
+  }
+
   async getRecentChatMessages(limit = 50) {
     return Array.from(this.chatMessages.values())
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
@@ -125,6 +145,26 @@ const storage = new MemStorage();
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Session configuration
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'healing-hearts-admin-secret-key-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+// Admin authentication middleware
+function requireAdmin(req, res, next) {
+  if (req.session && req.session.isAdmin) {
+    next();
+  } else {
+    res.status(401).json({ message: "Admin access required" });
+  }
+}
 
 const httpServer = createServer(app);
 
@@ -196,6 +236,39 @@ function broadcastUserCount() {
   });
 }
 
+// Authentication Routes
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const { password } = req.body;
+    
+    // Simple admin password check - you can change this password
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
+    
+    if (password === ADMIN_PASSWORD) {
+      req.session.isAdmin = true;
+      res.json({ message: "Logged in successfully", isAdmin: true });
+    } else {
+      res.status(401).json({ message: "Invalid password" });
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Login failed" });
+  }
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({ message: "Logout failed" });
+    }
+    res.json({ message: "Logged out successfully" });
+  });
+});
+
+app.get("/api/auth/status", (req, res) => {
+  const isAdmin = req.session && req.session.isAdmin;
+  res.json({ isAdmin: !!isAdmin });
+});
+
 // API Routes
 app.get("/api/quotes", async (req, res) => {
   try {
@@ -233,12 +306,42 @@ app.get("/api/blog", async (req, res) => {
   }
 });
 
-app.post("/api/blog", async (req, res) => {
+// Protected: Admin only blog creation
+app.post("/api/blog", requireAdmin, async (req, res) => {
   try {
     const post = await storage.createBlogPost(req.body);
     res.status(201).json(post);
   } catch (error) {
     res.status(500).json({ message: "Failed to create blog post" });
+  }
+});
+
+// Protected: Admin only video creation
+app.post("/api/videos", requireAdmin, async (req, res) => {
+  try {
+    const { title, url, description } = req.body;
+    
+    if (!title || !url) {
+      return res.status(400).json({ message: "Title and URL are required" });
+    }
+
+    const video = await storage.createVideo({
+      title,
+      url,
+      description: description || ""
+    });
+    res.status(201).json(video);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to create video" });
+  }
+});
+
+app.get("/api/videos", async (req, res) => {
+  try {
+    const videos = await storage.getAllVideos();
+    res.json(videos);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch videos" });
   }
 });
 
