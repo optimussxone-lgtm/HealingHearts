@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { MessageCircle, Settings, Send, Info } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { MessageCircle, Settings, Send, Info, Video, VideoOff, Mic, MicOff, PhoneOff, Phone } from "lucide-react";
 import { useWebSocket } from "@/hooks/use-websocket";
 import type { ChatMessage } from "@shared/schema";
 
@@ -10,6 +11,16 @@ export default function ChatSection() {
   const [messageText, setMessageText] = useState("");
   const [username, setUsername] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Video chat states
+  const [isVideoActive, setIsVideoActive] = useState(false);
+  const [isAudioActive, setIsAudioActive] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isConnectedToPartner, setIsConnectedToPartner] = useState(false);
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   
   const { 
     messages, 
@@ -59,6 +70,89 @@ export default function ChatSection() {
     return colors[index];
   };
 
+  // Video chat functions
+  const startVideoChat = async () => {
+    try {
+      setIsSearching(true);
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: true, 
+        audio: true 
+      });
+      
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+      
+      localStreamRef.current = stream;
+      setIsVideoActive(true);
+      setIsAudioActive(true);
+      
+      // Simulate finding a partner (in a real app, this would use WebRTC signaling)
+      setTimeout(() => {
+        setIsSearching(false);
+        setIsConnectedToPartner(true);
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Error accessing media devices:', error);
+      setIsSearching(false);
+    }
+  };
+
+  const stopVideoChat = () => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+    }
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+    }
+    
+    setIsVideoActive(false);
+    setIsAudioActive(false);
+    setIsSearching(false);
+    setIsConnectedToPartner(false);
+    localStreamRef.current = null;
+    peerConnectionRef.current = null;
+  };
+
+  const toggleVideo = () => {
+    if (localStreamRef.current) {
+      const videoTrack = localStreamRef.current.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = !videoTrack.enabled;
+        setIsVideoActive(videoTrack.enabled);
+      }
+    }
+  };
+
+  const toggleAudio = () => {
+    if (localStreamRef.current) {
+      const audioTrack = localStreamRef.current.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        setIsAudioActive(audioTrack.enabled);
+      }
+    }
+  };
+
+  const nextPartner = () => {
+    setIsSearching(true);
+    setIsConnectedToPartner(false);
+    
+    // Simulate finding new partner
+    setTimeout(() => {
+      setIsSearching(false);
+      setIsConnectedToPartner(true);
+    }, 1500);
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopVideoChat();
+    };
+  }, []);
+
   return (
     <section id="chat" className="py-16 bg-muted/30">
       <div className="container mx-auto px-4">
@@ -84,8 +178,20 @@ export default function ChatSection() {
             </ul>
           </div>
           
-          {/* Chat Interface */}
-          <Card className="overflow-hidden" data-testid="chat-interface">
+          <Tabs defaultValue="text" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="text" className="flex items-center gap-2">
+                <MessageCircle className="h-4 w-4" />
+                Text Chat
+              </TabsTrigger>
+              <TabsTrigger value="video" className="flex items-center gap-2">
+                <Video className="h-4 w-4" />
+                Video Chat
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="text">
+              <Card className="overflow-hidden" data-testid="chat-interface">
             {/* Chat Header */}
             <CardHeader className="bg-primary text-primary-foreground px-6 py-4 flex flex-row items-center justify-between">
               <div className="flex items-center space-x-2">
@@ -172,7 +278,106 @@ export default function ChatSection() {
                 Messages are moderated. Be kind and supportive.
               </p>
             </div>
-          </Card>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="video">
+              <Card className="min-h-[500px]">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-semibold">Video Chat</h4>
+                    <div className="text-sm text-muted-foreground">
+                      Anonymous peer support
+                    </div>
+                  </div>
+                </CardHeader>
+                
+                <CardContent>
+                  {!isConnectedToPartner && !isSearching ? (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                      <Video className="h-16 w-16 text-muted-foreground" />
+                      <h3 className="text-lg font-semibold">Connect with someone</h3>
+                      <p className="text-muted-foreground text-center max-w-md">
+                        Start a video chat with another person seeking support. You'll be matched anonymously.
+                      </p>
+                      <Button onClick={startVideoChat} className="mt-4">
+                        <Video className="h-4 w-4 mr-2" />
+                        Start Video Chat
+                      </Button>
+                    </div>
+                  ) : isSearching ? (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                      <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
+                      <h3 className="text-lg font-semibold">Looking for someone to chat with...</h3>
+                      <p className="text-muted-foreground text-center max-w-md">
+                        Please wait while we connect you with another person.
+                      </p>
+                      <Button variant="outline" onClick={stopVideoChat}>
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-64">
+                        <div className="relative bg-muted rounded-lg overflow-hidden">
+                          <video
+                            ref={remoteVideoRef}
+                            autoPlay
+                            playsInline
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                            Stranger
+                          </div>
+                        </div>
+                        
+                        <div className="relative bg-muted rounded-lg overflow-hidden">
+                          <video
+                            ref={localVideoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                            You
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center justify-center space-x-4">
+                        <Button
+                          variant={isVideoActive ? "default" : "destructive"}
+                          size="sm"
+                          onClick={toggleVideo}
+                        >
+                          {isVideoActive ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />}
+                        </Button>
+                        
+                        <Button
+                          variant={isAudioActive ? "default" : "destructive"}
+                          size="sm"
+                          onClick={toggleAudio}
+                        >
+                          {isAudioActive ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />}
+                        </Button>
+                        
+                        <Button variant="outline" size="sm" onClick={nextPartner}>
+                          <Phone className="h-4 w-4 mr-2" />
+                          Next
+                        </Button>
+                        
+                        <Button variant="destructive" size="sm" onClick={stopVideoChat}>
+                          <PhoneOff className="h-4 w-4 mr-2" />
+                          End Call
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </section>
