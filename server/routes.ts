@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { insertQuoteSchema, insertChatMessageSchema, insertFaqQuestionSchema, insertBlogPostSchema } from "@shared/schema";
+import { requireAdmin } from "./auth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -86,6 +87,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   }
 
+  // Authentication Routes
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { password } = req.body;
+      
+      // Simple admin password check - you can change this password
+      const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
+      
+      if (password === ADMIN_PASSWORD) {
+        (req.session as any).isAdmin = true;
+        res.json({ message: "Logged in successfully", isAdmin: true });
+      } else {
+        res.status(401).json({ message: "Invalid password" });
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Login failed" });
+    }
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).json({ message: "Logout failed" });
+      }
+      res.json({ message: "Logged out successfully" });
+    });
+  });
+
+  app.get("/api/auth/status", (req, res) => {
+    const isAdmin = req.session && (req.session as any).isAdmin;
+    res.json({ isAdmin: !!isAdmin });
+  });
+
   // API Routes
   app.get("/api/quotes", async (req, res) => {
     try {
@@ -154,7 +188,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/blog", async (req, res) => {
+  // Protected: Admin only blog creation
+  app.post("/api/blog", requireAdmin, async (req, res) => {
     try {
       const result = insertBlogPostSchema.safeParse(req.body);
       if (!result.success) {
@@ -165,6 +200,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(post);
     } catch (error) {
       res.status(500).json({ message: "Failed to create blog post" });
+    }
+  });
+
+  // Protected: Admin only video creation
+  app.post("/api/videos", requireAdmin, async (req, res) => {
+    try {
+      const { title, url, description } = req.body;
+      
+      if (!title || !url) {
+        return res.status(400).json({ message: "Title and URL are required" });
+      }
+
+      const video = await storage.createVideo({
+        title,
+        url,
+        description: description || ""
+      });
+      res.status(201).json(video);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create video" });
+    }
+  });
+
+  app.get("/api/videos", async (req, res) => {
+    try {
+      const videos = await storage.getAllVideos();
+      res.json(videos);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch videos" });
     }
   });
 

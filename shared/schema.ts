@@ -38,6 +38,14 @@ export const blogPosts = pgTable("blog_posts", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const videos = pgTable("videos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  url: text("url").notNull(),
+  description: text("description").default(""),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertQuoteSchema = createInsertSchema(quotes).omit({
   id: true,
   createdAt: true,
@@ -58,6 +66,11 @@ export const insertBlogPostSchema = createInsertSchema(blogPosts).omit({
   createdAt: true,
 });
 
+export const insertVideoSchema = createInsertSchema(videos).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -73,3 +86,5 @@ export type FaqQuestion = typeof faqQuestions.$inferSelect;
 export type InsertFaqQuestion = z.infer<typeof insertFaqQuestionSchema>;
 export type BlogPost = typeof blogPosts.$inferSelect;
 export type InsertBlogPost = z.infer<typeof insertBlogPostSchema>;
+export type Video = typeof videos.$inferSelect;
+export type InsertVideo = z.infer<typeof insertVideoSchema>;

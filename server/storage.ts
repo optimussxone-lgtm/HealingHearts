@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Quote, type InsertQuote, type ChatMessage, type InsertChatMessage, type FaqQuestion, type InsertFaqQuestion, type BlogPost, type InsertBlogPost } from "@shared/schema";
+import { type User, type InsertUser, type Quote, type InsertQuote, type ChatMessage, type InsertChatMessage, type FaqQuestion, type InsertFaqQuestion, type BlogPost, type InsertBlogPost, type Video, type InsertVideo } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -17,6 +17,9 @@ export interface IStorage {
   
   getAllBlogPosts(): Promise<BlogPost[]>;
   createBlogPost(post: InsertBlogPost): Promise<BlogPost>;
+  
+  getAllVideos(): Promise<Video[]>;
+  createVideo(video: InsertVideo): Promise<Video>;
 }
 
 export class MemStorage implements IStorage {
@@ -25,6 +28,7 @@ export class MemStorage implements IStorage {
   private chatMessages: Map<string, ChatMessage>;
   private faqQuestions: Map<string, FaqQuestion>;
   private blogPosts: Map<string, BlogPost>;
+  private videos: Map<string, Video>;
 
   constructor() {
     this.users = new Map();
@@ -32,6 +36,7 @@ export class MemStorage implements IStorage {
     this.chatMessages = new Map();
     this.faqQuestions = new Map();
     this.blogPosts = new Map();
+    this.videos = new Map();
     
     // Initialize with default quotes and FAQ questions
     this.initializeDefaultData();
@@ -199,6 +204,24 @@ export class MemStorage implements IStorage {
     };
     this.blogPosts.set(id, post);
     return post;
+  }
+
+  async getAllVideos(): Promise<Video[]> {
+    return Array.from(this.videos.values()).sort((a, b) => 
+      new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime()
+    );
+  }
+
+  async createVideo(insertVideo: InsertVideo): Promise<Video> {
+    const id = randomUUID();
+    const video: Video = { 
+      ...insertVideo, 
+      id, 
+      createdAt: new Date(),
+      description: insertVideo.description || ""
+    };
+    this.videos.set(id, video);
+    return video;
   }
 }
 
