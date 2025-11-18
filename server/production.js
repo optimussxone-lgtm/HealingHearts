@@ -429,14 +429,24 @@ app.get("/api/videos", async (req, res) => {
 
 // Serve static files
 const publicPath = path.join(__dirname, '..', 'dist', 'public');
+console.log('Static files path:', publicPath);
+console.log('Static files exist:', fs.existsSync(publicPath));
+
 if (fs.existsSync(publicPath)) {
   app.use(express.static(publicPath));
-  app.get('*', (req, res) => {
+  
+  // Catch-all route for SPA - must be last and exclude API routes
+  app.get('*', (req, res, next) => {
+    // Don't serve index.html for API routes
+    if (req.path.startsWith('/api') || req.path.startsWith('/ws')) {
+      return next();
+    }
     res.sendFile(path.join(publicPath, 'index.html'));
   });
 } else {
+  console.error('Public path does not exist:', publicPath);
   app.get('*', (req, res) => {
-    res.send('<h1>HealingHearts - Build in progress...</h1>');
+    res.status(500).send('<h1>HealingHearts - Build files not found</h1><p>Expected path: ' + publicPath + '</p>');
   });
 }
 
